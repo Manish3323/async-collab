@@ -2,8 +2,6 @@ scopeconfig:
   - scope: node
 
 fileignoreconfig:
-- filename: public/vite.svg
-  checksum: 5fe742fa65b1dea8626174e639646dd7665eb5976ae9caa62855bc9bb33aeeb0
-- filename: src/main.ts
-  checksum: 80c8cc892ef7f380859e4cd7e4211e5d594ae1ee3e4462ef38b196bdffc12ed1
+- filename: src/slack.ts
+  checksum: eac8ca2331f2b1b4bfe021137df77bfe0ad2017ea73dfc77bf09ea3d3aba301c
 version: ""

@@ -104,7 +104,7 @@ export const refreshAccessToken = async (refreshToken: string) => {
   oAuth2Client.setCredentials({ refresh_token: refreshToken });
 
   await oAuth2Client.refreshAccessToken();
-  console.log(oAuth2Client.credentials);
+  // console.log(oAuth2Client.credentials);
   return {
     accessToken: oAuth2Client.credentials.access_token,
     expiryDate: oAuth2Client.credentials.expiry_date

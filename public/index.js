@@ -3,23 +3,42 @@ const generateSummaryButton = document.getElementById('generateSummary');
 const summaryBox = document.getElementById('summaryBox');
 const slackSummaryParagraph = document.getElementById('slack-summary');
 const jiraSummaryParagraph = document.getElementById('jira-summary');
-const loading = document.querySelector('.loader')
+const loading = document.querySelector('#loader')
 const channelSelectorBox = document.getElementById('channelSelectorBox');
 const channelSelector = document.getElementById('channelSelector');
 const applySelectedChannels = document.getElementById('applySelectedChannels');
 const resetChannels = document.getElementById('resetChannels');
 const addToGoogleDoc = document.getElementById('addToGoogleDoc');
+const docLoader = document.getElementById('docLoader');
+const openDoc = document.getElementById('openDoc');
+const buttons = document.querySelector('.buttons');
 let selectedChannels = [];
 
 
-generateSummaryButton.style.display = 'none';
+const errorButton = document.getElementById('error-button');
+const errorBox = document.getElementById('error-box');
+const errorMessage = errorBox.querySelector('.error-message');
+const closeButton = errorBox.querySelector('.close-button');
+
+closeButton.addEventListener('click', () => {
+  errorBox.style.display = 'none';
+});
+
+buttons.style.display = 'none'
 summaryBox.style.display = 'none';
 addToSlackButton.style.display = 'none';
 channelSelectorBox.style.display = 'none';
-resetChannels.style.display = 'none';
+openDoc.style.display = 'none';
 
-const showError = (errorMessage) => {
-  console.error(errorMessage)
+const showError = (message) => {
+  console.error(message)
+  console.log(message)
+  errorMessage.innerText = String(message);
+  errorBox.style.display = 'flex';
+
+  setTimeout(() => {
+    errorBox.style.display = 'none';
+  }, 10000);
 }
 
 const handleChannel = (id) => {
@@ -45,11 +64,11 @@ const generateCheckBox = (id, name, checked) => {
 
 
 generateSummaryButton.onclick = async () => {
-  generateSummaryButton.style.display = 'none';
-  resetChannels.style.display = 'none';
-  loading.style.display = 'block'
+  buttons.style.display = 'none';
+  loading.style.display = 'block';
+  summaryBox.style.display = 'none';
   console.log('Trying to generate summary')
-  const response = await fetch('/generateSummary', {
+  const res = await fetch('/generateSummary', {
     method: 'POST',
     headers: {
       "Content-Type": "application/json",
@@ -59,23 +78,41 @@ generateSummaryButton.onclick = async () => {
       channels: localStorage.getItem('channels').split(',')
     })
   })
-  const data = await response.json();
-  console.log({data})
-  slackSummaryParagraph.innerText = data.slackResponse.trim();
-  jiraSummaryParagraph.innerText = data.jiraResponse.trim();
+  const response = await res.json();
+  console.log({response})
+  if(res.status !== 200) {
+    buttons.style.display = 'flex';
+    loading.style.display = 'none'
+    return showError(response.error);
+  }
+  if(response.errorOccured) {
+    showError('Error occured while generating summary!');
+  }
+  slackSummaryParagraph.innerText = response.slackResponse.trim();
+  jiraSummaryParagraph.innerText = response.jiraResponse.trim();
+  buttons.style.display = 'flex';
+  generateSummaryButton.innerText = 'Re-Generate Summary';
   loading.style.display = 'none'
-  summaryBox.style.display = 'block'
+  summaryBox.style.display = 'flex'
+  if(localStorage.getItem('googleAccessToken'))
+    addSummaryToGoogleDoc();
 }
 
 applySelectedChannels.onclick = () => {
   localStorage.setItem('channels', selectedChannels.join(','))
   channelSelectorBox.style.display = 'none';
-  generateSummaryButton.style.display = 'block';
-  resetChannels.style.display = 'block';
+  buttons.style.display = 'flex';
 }
 
 const addSummaryToGoogleDoc = async () => {
-  const body = slackSummaryParagraph.innerText + jiraSummaryParagraph.innerHTML;
+  docLoader.style.display = 'block';
+  const body = `
+Slack:
+${slackSummaryParagraph.innerText}
+
+Jira:
+${jiraSummaryParagraph.innerHTML}
+`
   const res = await fetch('/google/addToFile', {
     method: 'POST',
     headers: {
@@ -88,13 +125,14 @@ const addSummaryToGoogleDoc = async () => {
   });
   const response = await res.json();
   if(res.status !== 200) {
-    throw new Error(response.error)
+    return showError(response.error)
   }
   // console.log({response})
   const link =  response.data.docLink;
-  addToGoogleDoc.innerText = 'Add To Google Doc';
   addToGoogleDoc.style.display = 'none';
-  window.open(link, '_blank').focus();
+  docLoader.style.display = 'none';
+  localStorage.setItem('docLink', link);
+  openDoc.style.display = 'block'
 }
 
 const refreshAccessToken = async () => {
@@ -115,8 +153,9 @@ const refreshAccessToken = async () => {
 
 addToGoogleDoc.onclick = async () => {
   try {
-    addToGoogleDoc.innerText = 'Loading...';
-    addToGoogleDoc.disabled = true;
+    // addToGoogleDoc.innerText = 'Adding to Google Doc...';
+    addToGoogleDoc.style.display = 'none';
+    docLoader.style.display = 'block';
     if(!localStorage.getItem('googleTokenExpiryDate')) {
       window.open('/google', '_blank').focus();
       return;
@@ -132,6 +171,13 @@ addToGoogleDoc.onclick = async () => {
     await addSummaryToGoogleDoc();
   } catch (error) {
     showError(error);
+  }
+}
+
+openDoc.onclick = () => {
+  const link = localStorage.getItem('docLink');
+  if(link) {
+    window.open(link, '_blank').focus();
   }
 }
 
@@ -170,9 +216,9 @@ const getChannels = async () => {
 resetChannels.onclick = async () => {
   localStorage.removeItem('channels')
   selectedChannels = []
-  generateSummaryButton.style.display = 'none';
-  resetChannels.style.display = 'none';
+  buttons.style.display = 'none';
   loading.style.display = 'block';
+  summaryBox.style.display = 'none'
   getChannels().then(showChannelSelector);
 }
 
@@ -196,8 +242,7 @@ const main = () => {
     if(localStorage.getItem('channels')) {
       selectedChannels = localStorage.getItem('channels').split(',');
       loading.style.display = 'none'
-      generateSummaryButton.style.display = 'block';
-      resetChannels.style.display = 'block';
+      buttons.style.display = 'flex'
     } else {
       getChannels().then(showChannelSelector);
     }
@@ -206,12 +251,19 @@ const main = () => {
     addToSlackButton.style.display = 'block'
   }
 
+  if(localStorage.getItem('googleAccessToken')) {
+    addToGoogleDoc.style.display = 'none'
+  } else {
+    docLoader.style.display = 'none'
+  }
+
+  if(localStorage.getItem('docLink')) {
+    openDoc.style.display = 'block'
+  } 
+
 }
 
 main()
-
-
-
 
 
 

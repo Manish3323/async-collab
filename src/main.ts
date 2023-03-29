@@ -2,91 +2,83 @@ import dotenv from 'dotenv';
 dotenv.config()
 
 import express, { Response } from "express";
-import { WebClient } from "@slack/web-api";
 import { getSummary } from "./openAi";
 import { decrypt, encrypt } from './crypto';
 import { addToFile, generateAuthUrl, getTokensFromCode, refreshAccessToken } from './googleDocs';
 import { humaniseJiraEvent, queryParamConstructor } from './helpers';
+import { getChannels, getConversations, getSlackAuthUrl, getSlackTokenFromCode } from './slack';
 import {events} from './jira-events.json';
 
 const app = express();
 const PORT = 3000;
 
-const client = new WebClient();
 app.use(express.static("public"));
 app.use(express.json());
 
-app.get("/channels", async (req, res) => {
+app.get('/slack', (_, res) => {
+  res.redirect(getSlackAuthUrl())
+})
+
+app.get("/channels", async (req, res, next) => {
   try {
-    let token: string|undefined = req.headers.authorization
+    let token: string | undefined = req.headers.authorization
     if(!token) return res.sendStatus(403)
     token = decrypt(token);
-    const response = await client.conversations.list({
-      token,
+    const channels = await getChannels(token);
+    return res.status(200).json({
+      data: channels
     });
-    
-    if(response.ok){
-      return res.status(200).json({ data: response.channels?.filter(c => !c.is_private)})
-    }else{
-      throw new Error(response.error)
-    }
   } catch (e) {
-    console.error(e)
-    return res.status(500).json({error: e})
+    return next(e);
   }
 })
 
-app.post("/generateSummary", async(req,res) => {
-  console.log("here")
-  let token: string | undefined = req.headers.authorization
-  if(!token) return res.sendStatus(403)
-  token = decrypt(token);
-  const channels : any[] = req.body.channels
-  if(!channels?.length) {
-    res.status(400).send("channels is required body parameter")
-  }
+app.post("/generateSummary", async (req, res, next) => {
   try {
-    const responses = []
-    for await (const channel of channels) {
-      const response = await client.conversations.history({channel, token}).catch((err) => {console.log(String(err))})
-      if(response?.messages){
-        responses.push(...response.messages.map(m => `${m.user}:${m.text}`))
-      }
+    let token: string | undefined = req.headers.authorization
+    if(!token) return res.sendStatus(403)
+    token = decrypt(token);
+
+    const channels : string[] = req.body.channels
+    if(!channels?.length) {
+      res.status(400).send("channels is required body parameter")
     }
 
-    const summary =  await getSummary(responses)
+    const { conversations, errorOccured } = await getConversations(token, channels);
+    console.log({conversations, errorOccured })
+    if(conversations.length == 0) {
+      throw new Error('No conversations happened in the given timeframe!')
+    }
+
+    const summary =  await getSummary(conversations)
     const jiraSummary =  await getSummary(events.map(humaniseJiraEvent))
 
-    if(jiraSummary.data && summary.data){
-      const jiraResponse = jiraSummary.data.choices.map(c => c.text).join(",")
-      const slackResponse = summary.data.choices.map(c => c.text).join(",")
-      return res.status(200).send({slackResponse, jiraResponse})
-    }else{
-      throw new Error("Failed to generate summary")
-    }
+    if(!summary.data || !jiraSummary.data) throw new Error("Failed to generate summary");
+
+    const jiraResponse = jiraSummary.data.choices.map(c => c.text).join(",")
+    const slackResponse = summary.data.choices.map(c => c.text).join(",")
+
+    return res.status(200).json({
+      slackResponse,
+      jiraResponse,
+      errorOccured
+    })
   } catch (e) {
-    console.log(e)
-    return res.status(500).send((e as Error).message)
+    return next(e);
   }
 })
 
 app.get("/callback", async (req, res, next) => {
   try {
-    console.log(req.url)
-    const qs = new URL(req.url, process.env.BASE_URL).searchParams;
-    const code = qs.get("code");
-    const auth = await client.oauth.v2.access({
-      code: code || '',
-      client_id: process.env.SLACK_CLIENT_ID || '',
-      client_secret: process.env.SLACK_CLIENT_SECRET || '',
-      redirect_uri: process.env.BASE_URL+'/callback',
-    });
-    if(!auth?.access_token)
-      throw new Error('Authentication Failed!')
-    const token = encrypt(auth.access_token);
-    res.redirect(`/?slackToken=${token}`);
+    const code = String(req.query.code);
+    if(!code) {
+      throw new Error('No Code Found!');
+    }
+    const accessToken = await getSlackTokenFromCode(code);
+    const token = encrypt(accessToken);
+    return res.redirect(`/?slackToken=${token}`);
   } catch (e) {
-    next(e);
+    return next(e);
   }
 
 });
@@ -147,7 +139,7 @@ app.post('/google/addToFile', async (req, res, next) => {
       throw new Error('No body found!')
     }
     // console.log(body)
-    const filename = `${process.env.SLACK_CLIENT_ID} Slack`
+    const filename = `ACE Slack`
     const docLink = await addToFile(filename, body, accessToken);
     return res.status(200).json({
       data: {

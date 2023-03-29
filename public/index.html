@@ -13,13 +13,14 @@
 
       <div id="main">
         <h1>
-          Asynchronous Colaborations
+          Async Collaboration Enablers
         </h1>
-        <div class="loader">
+        <h2 id="sub-heading">Smoothening async communication using the power of AI</h2>
+        <div id="loader" class="loader">
           <div class="loader__figure"></div>
           <p class="loader__label">Loading</p>
         </div>
-        <button id="addToSlack" class="btn"><a href="https://slack.com/oauth/v2/authorize?scope=channels:read,channels:history&client_id=4967730427047.4968975143847">Add to Slack</a></button>
+        <button id="addToSlack" class="btn"><a href="/slack">Add to Slack</a></button>
         <div class="box" id="channelSelectorBox">
           <h2>Select Channels</h2>
           <div id="channelSelector">
@@ -27,20 +28,29 @@
           </div>
           <button id="applySelectedChannels" class="btn">Apply</button>    
         </div>
-        <div class="buttons">
-          <button id="generateSummary" class="btn">Generate Summary</button>
-          <button class="btn icon" id="resetChannels"><img src="reset.svg" alt="Reset" ></button>
-        </div>
-
 
         <div id="summaryBox" class="box">
           <h2>Slack Summary</h2>
           <p id="slack-summary"></p>
           <h2>Jira Summary</h2>
           <p id="jira-summary"></p>
+          <div id="docLoader" class="loader">
+            <div class="loader__figure"></div>
+            <p class="loader__label">Adding to Google Doc...</p>
+          </div>
           <button class="btn" id="addToGoogleDoc">Add To Google Doc</button>
         </div>
 
+        <div class="buttons">
+          <button id="generateSummary" class="btn">Generate Summary</button>
+          <button class="btn icon" id="resetChannels"><img src="reset.svg" alt="Reset" ></button>
+          <button class="btn icon" id="openDoc"><img src="doc.svg" alt="Doc" ></button>
+        </div>
+
+      </div>
+      <div id="error-box">
+        <div class="close-button">&times;</div>
+        <div class="error-message"></div>
       </div>
 
     </div>
